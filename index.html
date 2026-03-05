@@ -1,0 +1,1764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pyramid Builder</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3248;
+    --accent: #5b6ef5;
+    --accent2: #7c3aed;
+    --green: #22c55e;
+    --red: #ef4444;
+    --amber: #f59e0b;
+    --orange: #f97316;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --mono: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 13px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+
+  .logo { display: flex; align-items: center; gap: 12px; }
+
+  .logo-svg {
+    width: 34px; height: 34px;
+    flex-shrink: 0;
+  }
+
+  .logo h1 { font-size: 14px; font-weight: 700; letter-spacing: 0.3px; }
+
+  .header-actions { display: flex; gap: 8px; align-items: center; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 6px 13px; border-radius: 6px; border: none;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    white-space: nowrap;
+    font-family: inherit;
+  }
+  .btn:hover { opacity: 0.82; }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-ghost {
+    background: transparent; color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { color: var(--text); border-color: var(--muted); opacity: 1; }
+  .btn-green { background: var(--green); color: #000; }
+  .btn:disabled { opacity: 0.3; cursor: default; pointer-events: none; }
+
+  main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  /* Top row: source + patch side by side */
+  .top-row {
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
+    min-height: 0;
+    flex-shrink: 0;
+  }
+
+  /* Horizontal resize handle between source and patch */
+  .h-resizer {
+    width: 5px;
+    background: var(--border);
+    cursor: col-resize;
+    flex-shrink: 0;
+    transition: background 0.15s;
+    position: relative;
+    z-index: 10;
+  }
+  .h-resizer:hover, .h-resizer.dragging { background: var(--accent); }
+
+  /* Vertical resize handle between top row and bottom result */
+  .v-resizer {
+    height: 5px;
+    background: var(--border);
+    cursor: row-resize;
+    flex-shrink: 0;
+    transition: background 0.15s;
+    position: relative;
+    z-index: 10;
+  }
+  .v-resizer:hover, .v-resizer.dragging { background: var(--accent); }
+
+  /* Bottom row: result pane full-width */
+  .bottom-row {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+    flex: 1;
+  }
+
+  .pane {
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .pane-full {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .pane-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-shrink: 0;
+    background: var(--surface);
+  }
+
+  .pane-title {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .pane-title .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent);
+    flex-shrink: 0;
+  }
+
+  textarea {
+    flex: 1;
+    width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    border: none;
+    outline: none;
+    resize: none;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.65;
+    padding: 14px 16px;
+    tab-size: 2;
+    min-height: 0;
+  }
+
+  textarea::placeholder { color: var(--muted); opacity: 0.6; }
+  textarea:focus { background: #0d1020; }
+
+  .drop-zone { position: relative; }
+
+  .drop-zone.drag-over::after {
+    content: 'Drop file here';
+    position: absolute; inset: 0;
+    background: rgba(91, 110, 245, 0.1);
+    border: 2px dashed var(--accent);
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; color: var(--accent); font-weight: 700;
+    pointer-events: none;
+  }
+
+  #statusLog {
+    flex-shrink: 0;
+    max-height: 176px;
+    overflow-y: auto;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .log-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 6px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    font-family: var(--mono);
+    animation: fadeIn 0.18s ease;
+    cursor: pointer;
+  }
+
+  .log-row:hover { background: rgba(255,255,255,0.03); }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-2px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .log-row:last-child { border-bottom: none; }
+  .log-icon { flex-shrink: 0; margin-top: 1px; }
+  .log-ok    { color: var(--green); }
+  .log-error { color: var(--red); background: rgba(239,68,68,0.05); }
+  .log-warn  { color: var(--amber); }
+  .log-fuzzy { color: var(--orange); background: rgba(249,115,22,0.05); }
+  .log-info  { color: var(--muted); }
+  .log-text  { flex: 1; line-height: 1.5; }
+  .log-num   { color: var(--muted); flex-shrink: 0; }
+  .log-detail-btn {
+    flex-shrink: 0; background: none; border: none;
+    color: var(--muted); cursor: pointer; font-size: 11px;
+    padding: 0 2px; opacity: 0.6;
+    font-family: inherit;
+    transition: opacity 0.15s, color 0.15s;
+  }
+  .log-detail-btn:hover { opacity: 1; color: var(--accent); }
+
+  #summaryBar {
+    display: none;
+    padding: 7px 16px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.4px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+    align-items: center; gap: 12px;
+    background: var(--surface2);
+  }
+
+  #summaryBar.visible { display: flex; }
+  .sum-ok    { color: var(--green); }
+  .sum-fuzzy { color: var(--orange); }
+  .sum-err   { color: var(--red); }
+  .sum-sep   { color: var(--border); }
+
+  #diffView {
+    display: none;
+    flex: 1; overflow-y: auto;
+    font-family: var(--mono);
+    font-size: 11.5px; line-height: 1.7;
+    padding: 8px 0;
+    min-height: 0;
+  }
+
+  .diff-line { display: flex; padding: 0 16px; gap: 12px; }
+  .diff-line:hover { background: rgba(255,255,255,0.02); }
+  .diff-ln {
+    color: var(--muted); font-size: 10px; width: 34px;
+    text-align: right; flex-shrink: 0; user-select: none; padding-top: 1px;
+  }
+  .diff-content { flex: 1; white-space: pre-wrap; word-break: break-all; }
+  .diff-add { background: rgba(34,197,94,0.07); color: #86efac; }
+  .diff-del { background: rgba(239,68,68,0.07); color: #fca5a5; text-decoration: line-through; opacity: 0.75; }
+  .diff-ctx { color: var(--muted); }
+  .diff-sep {
+    padding: 3px 16px; color: var(--muted); font-size: 10px;
+    border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .view-toggle {
+    display: flex; gap: 2px;
+    background: var(--bg);
+    border-radius: 6px; padding: 2px;
+    border: 1px solid var(--border);
+  }
+
+  .view-toggle button {
+    padding: 3px 10px; border-radius: 4px;
+    font-size: 10px; font-weight: 600; border: none;
+    background: transparent; color: var(--muted);
+    cursor: pointer; letter-spacing: 0.5px;
+    font-family: inherit;
+  }
+
+  .view-toggle button.active { background: var(--surface2); color: var(--text); }
+
+  .result-bar {
+    display: flex; align-items: center;
+    padding: 5px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+    flex-shrink: 0;
+    min-height: 26px;
+  }
+
+  #matchStats { font-size: 10px; color: var(--muted); }
+
+  /* Details modal */
+  #detailsModal {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 200;
+    align-items: center; justify-content: center;
+    backdrop-filter: blur(5px);
+  }
+  #detailsModal.open { display: flex; }
+
+  .details-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: min(780px, 94vw);
+    max-height: 88vh;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 28px 72px rgba(0,0,0,0.6);
+  }
+
+  .details-header {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: var(--surface2);
+    flex-shrink: 0;
+  }
+
+  .details-header h2 { font-size: 12px; font-weight: 700; color: var(--text); }
+
+  .details-nav {
+    display: flex; align-items: center; gap: 6px;
+  }
+
+  .details-nav span {
+    font-size: 10px; color: var(--muted); min-width: 60px; text-align: center;
+  }
+
+  .nav-btn {
+    background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); border-radius: 5px;
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 13px;
+    transition: background 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+  }
+  .nav-btn:hover { background: var(--surface2); border-color: var(--accent); color: var(--accent); }
+  .nav-btn:disabled { opacity: 0.3; cursor: default; pointer-events: none; }
+
+  .details-body {
+    flex: 1; overflow: hidden;
+    display: flex; flex-direction: column;
+    min-height: 0;
+  }
+
+  .details-meta {
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px; color: var(--muted);
+    flex-shrink: 0;
+    display: flex; gap: 14px; flex-wrap: wrap; align-items: center;
+  }
+
+  .details-meta .dm-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 8px; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.5px; text-transform: uppercase;
+  }
+
+  .dm-ok   { background: rgba(34,197,94,0.14);  color: var(--green); }
+  .dm-fuzzy{ background: rgba(249,115,22,0.14); color: var(--orange); }
+  .dm-err  { background: rgba(239,68,68,0.14);  color: var(--red); }
+
+  .details-code-wrap {
+    flex: 1; overflow-y: auto; min-height: 0;
+    font-family: var(--mono);
+    font-size: 11.5px; line-height: 1.7;
+  }
+
+  .details-section-label {
+    padding: 6px 18px 4px;
+    font-size: 9px; font-weight: 700; letter-spacing: 1.5px;
+    text-transform: uppercase; color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+    flex-shrink: 0;
+  }
+
+  .details-code-line {
+    display: flex; gap: 12px; padding: 0 18px;
+  }
+  .details-code-line:hover { background: rgba(255,255,255,0.02); }
+  .dcl-ln {
+    color: var(--muted); font-size: 10px; width: 34px;
+    text-align: right; flex-shrink: 0; user-select: none; padding-top: 2px;
+  }
+  .dcl-content { flex: 1; white-space: pre-wrap; word-break: break-all; color: var(--text); }
+
+  .highlight-match {
+    background: rgba(91,110,245,0.18);
+    border-left: 3px solid var(--accent);
+  }
+  .highlight-match .dcl-content { color: #c4cbff; }
+
+  .details-footer {
+    padding: 10px 18px; border-top: 1px solid var(--border);
+    display: flex; gap: 8px; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  /* Prompt modal */
+  #promptModal {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.65);
+    z-index: 100;
+    align-items: center; justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+
+  #promptModal.open { display: flex; }
+
+  .modal-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: min(680px, 92vw);
+    max-height: 85vh;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+  }
+
+  .modal-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+
+  .modal-header h2 { font-size: 13px; font-weight: 700; }
+
+  .modal-body {
+    padding: 18px 20px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+
+  .modal-body textarea {
+    height: 320px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    font-size: 11px; padding: 12px; flex: none;
+  }
+
+  .modal-note {
+    font-size: 11px; color: var(--muted); line-height: 1.6;
+    background: var(--surface2);
+    padding: 10px 14px; border-radius: 6px;
+    border-left: 3px solid var(--accent);
+  }
+
+  .modal-footer {
+    padding: 12px 20px; border-top: 1px solid var(--border);
+    display: flex; gap: 8px; justify-content: flex-end;
+  }
+
+  /* Author card modal */
+  #authorModal {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.65);
+    z-index: 300;
+    align-items: center; justify-content: center;
+    backdrop-filter: blur(6px);
+  }
+  #authorModal.open { display: flex; }
+
+  .author-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 36px 44px;
+    text-align: center;
+    box-shadow: 0 28px 72px rgba(0,0,0,0.55);
+    min-width: 280px;
+    animation: popIn 0.2s cubic-bezier(0.34,1.56,0.64,1);
+  }
+
+  @keyframes popIn {
+    from { opacity: 0; transform: scale(0.88); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+
+  .author-hashtag {
+    font-size: 22px; font-weight: 800; letter-spacing: -0.5px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 12px;
+  }
+
+  .author-email {
+    font-size: 12px; color: var(--muted);
+    font-family: var(--mono);
+    letter-spacing: 0.3px;
+  }
+
+  .author-close {
+    margin-top: 24px;
+  }
+
+  .filename-row {
+    display: flex; gap: 8px; align-items: center;
+    padding: 7px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+
+  .filename-input {
+    flex: 1; background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text); border-radius: 5px;
+    padding: 5px 10px;
+    font-family: var(--mono); font-size: 11px;
+    outline: none;
+  }
+
+  .filename-input:focus { border-color: var(--accent); }
+
+  /* Footer */
+  footer {
+    padding: 8px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: var(--bg);
+  }
+
+  .author-sig {
+    font-family: 'Georgia', 'Palatino', serif;
+    font-style: italic;
+    font-size: 13px;
+    color: var(--muted);
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.2s, color 0.2s;
+    background: none; border: none;
+    padding: 2px 4px;
+  }
+
+  .author-sig:hover { opacity: 1; color: var(--accent); }
+
+  @media (max-width: 680px) {
+    main { grid-template-columns: 1fr; }
+    .pane-full { grid-column: 1; }
+    header { padding: 12px 16px; }
+  }
+
+  /* ── Multi-file tabs ──────────────────────────────────────────────── */
+  .source-tabs {
+    display: flex; align-items: center; gap: 2px;
+    padding: 4px 10px 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .source-tabs::-webkit-scrollbar { height: 3px; }
+  .source-tabs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .src-tab {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px 5px;
+    border-radius: 5px 5px 0 0;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.3px;
+    color: var(--muted); background: transparent;
+    border: 1px solid transparent; border-bottom: none;
+    cursor: pointer; white-space: nowrap;
+    transition: color 0.12s, background 0.12s;
+    font-family: var(--mono);
+  }
+  .src-tab:hover { color: var(--text); background: var(--surface2); }
+  .src-tab.active {
+    color: var(--text); background: var(--bg);
+    border-color: var(--border);
+    margin-bottom: -1px;
+    padding-bottom: 6px;
+  }
+  .src-tab .tab-close {
+    width: 13px; height: 13px; border-radius: 3px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 9px; opacity: 0.5;
+    background: none; border: none; color: inherit; cursor: pointer;
+    transition: opacity 0.12s, background 0.12s;
+    padding: 0; flex-shrink: 0;
+  }
+  .src-tab .tab-close:hover { opacity: 1; background: rgba(239,68,68,0.2); color: var(--red); }
+
+  .src-tab-add {
+    padding: 4px 8px 5px;
+    color: var(--muted); background: transparent; border: none;
+    font-size: 14px; cursor: pointer; line-height: 1;
+    border-radius: 4px; flex-shrink: 0;
+    transition: color 0.12s;
+  }
+  .src-tab-add:hover { color: var(--accent); }
+
+  .result-tabs {
+    display: flex; align-items: center; gap: 2px;
+    padding: 4px 10px 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .result-tabs::-webkit-scrollbar { height: 3px; }
+  .result-tabs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .res-tab {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px 5px;
+    border-radius: 5px 5px 0 0;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.3px;
+    color: var(--muted); background: transparent;
+    border: 1px solid transparent; border-bottom: none;
+    cursor: pointer; white-space: nowrap;
+    transition: color 0.12s, background 0.12s;
+    font-family: var(--mono);
+  }
+  .res-tab:hover { color: var(--text); background: var(--surface2); }
+  .res-tab.active {
+    color: var(--text); background: var(--bg);
+    border-color: var(--border);
+    margin-bottom: -1px;
+    padding-bottom: 6px;
+  }
+  .res-tab .tab-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--green); flex-shrink: 0;
+  }
+  .res-tab .tab-dot.has-errors { background: var(--red); }
+  .res-tab .tab-dot.has-fuzzy  { background: var(--amber); }
+
+  .result-panel { display: none; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; }
+  .result-panel.active { display: flex; }
+
+  #noResultsMsg {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    color: var(--muted); font-size: 12px; font-style: italic;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg class="logo-svg" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="lg1" x1="0" y1="0" x2="34" y2="34" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#5b6ef5"/>
+          <stop offset="100%" stop-color="#7c3aed"/>
+        </linearGradient>
+        <linearGradient id="lg2" x1="34" y1="0" x2="0" y2="34" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#a78bfa"/>
+          <stop offset="100%" stop-color="#5b6ef5"/>
+        </linearGradient>
+      </defs>
+      <!-- Futuristic Pyramid Emblem -->
+      <path d="M17 2 L30 9.5 L30 24.5 L17 32 L4 24.5 L4 9.5 Z" stroke="url(#lg1)" stroke-width="1.5" fill="none" opacity="0.6"/>
+      <polygon points="17,3 31,31 3,31" stroke="url(#lg1)" stroke-width="1.5" fill="none" opacity="0.9"/>
+<line x1="17" y1="3" x2="17" y2="31" stroke="url(#lg2)" stroke-width="1" opacity="0.7"/>
+<line x1="3" y1="31" x2="31" y2="31" stroke="url(#lg2)" stroke-width="1" opacity="0.7"/>
+      <circle cx="17" cy="7" r="2.5" fill="url(#lg1)"/>
+      <circle cx="9" cy="22" r="2.5" fill="url(#lg1)"/>
+      <circle cx="25" cy="22" r="2.5" fill="url(#lg1)"/>
+      <!-- Connection lines between nodes -->
+      <line x1="17" y1="9.5" x2="10.5" y2="20" stroke="url(#lg2)" stroke-width="1.2" opacity="0.8"/>
+      <line x1="17" y1="9.5" x2="23.5" y2="20" stroke="url(#lg2)" stroke-width="1.2" opacity="0.8"/>
+      <line x1="11.5" y1="22" x2="22.5" y2="22" stroke="url(#lg2)" stroke-width="1.2" opacity="0.8"/>
+      <!-- Central node -->
+      <circle cx="17" cy="17" r="3" fill="url(#lg1)" opacity="0.9"/>
+      <!-- Spokes from center to nodes -->
+      <line x1="17" y1="14" x2="17" y2="9.5" stroke="url(#lg2)" stroke-width="1" opacity="0.5"/>
+      <line x1="14.4" y1="18.6" x2="11" y2="21" stroke="url(#lg2)" stroke-width="1" opacity="0.5"/>
+      <line x1="19.6" y1="18.6" x2="23" y2="21" stroke="url(#lg2)" stroke-width="1" opacity="0.5"/>
+      <!-- Outer glow dots -->
+      <circle cx="17" cy="7" r="1" fill="#c4cbff" opacity="0.8"/>
+      <circle cx="9" cy="22" r="1" fill="#c4cbff" opacity="0.8"/>
+      <circle cx="25" cy="22" r="1" fill="#c4cbff" opacity="0.8"/>
+      <circle cx="17" cy="17" r="1.2" fill="white" opacity="0.9"/>
+    </svg>
+    <div>
+      <h1>Pyramid Builder</h1>
+    </div>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-ghost" onclick="showPromptModal()">AI Prompt</button>
+    <button class="btn btn-ghost" onclick="clearAll()">✕ Clear</button>
+  </div>
+</header>
+
+<main id="mainLayout">
+  <div class="top-row" id="topRow" style="height:45%;">
+  <div class="pane" id="sourcePane" style="width:50%;min-width:120px;">
+    <div class="pane-header">
+      <div class="pane-title"><span class="dot" style="background:var(--muted)"></span>Source Files</div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-ghost" onclick="triggerFileOpen()" style="font-size:11px;padding:4px 10px;">📂 Open</button>
+        <input type="file" id="fileInput" multiple style="display:none" onchange="loadFile(event)">
+      </div>
+    </div>
+    <!-- Source tabs rendered by JS -->
+    <div class="source-tabs" id="sourceTabs"></div>
+    <!-- Single shared textarea; content swapped on tab switch -->
+    <textarea id="sourceCode" class="drop-zone" placeholder="Paste source code here, or drag &amp; drop files…" spellcheck="false" oninput="syncActiveSource()"></textarea>
+    <div class="filename-row">
+      <span style="color:var(--muted);font-size:11px;white-space:nowrap;">File:</span>
+      <input type="text" id="fileName" class="filename-input" placeholder="filename.txt" oninput="syncActiveFilename()">
+    </div>
+  </div><!-- end sourcePane -->
+
+  <div class="h-resizer" id="hResizer"></div>
+
+  <div class="pane" id="patchPane" style="flex:1;min-width:120px;">
+    <div class="pane-header">
+      <div class="pane-title"><span class="dot"></span>JSON Patch</div>
+      <button class="btn btn-primary" onclick="applyPatch()">▶ Apply Patch</button>
+    </div>
+    <textarea id="patchJson" placeholder='Paste the JSON patch from your AI here…
+
+Example:
+[
+  {
+    "action": "replace",
+    "search": "old code",
+    "replace": "new code"
+  },
+  {
+    "action": "insert_after",
+    "search": "anchor line",
+    "insert": "\nnew line after"
+  },
+  {
+    "action": "delete",
+    "search": "line to remove\n"
+  }
+]' spellcheck="false"></textarea>
+  </div><!-- end patchPane -->
+  </div><!-- end topRow -->
+
+  <div class="v-resizer" id="vResizer"></div>
+
+  <div class="bottom-row">
+  <div class="pane pane-full">
+    <div class="pane-header">
+      <div class="pane-title"><span class="dot" style="background:var(--green)"></span>Result</div>
+      <div style="display:flex;gap:8px;align-items:center;" id="resultActions">
+        <div class="view-toggle">
+          <button id="viewCode" class="active" onclick="setView('code')">CODE</button>
+          <button id="viewDiff" onclick="setView('diff')">DIFF</button>
+        </div>
+        <button class="btn btn-ghost" id="copyBtn" onclick="copyResult()" style="font-size:11px;padding:4px 10px;">Copy</button>
+        <button class="btn btn-green" id="downloadBtn" onclick="downloadFile()" disabled>↓ Download</button>
+        <button class="btn btn-ghost" id="downloadAllBtn" onclick="downloadAll()" disabled style="font-size:11px;padding:4px 10px;">↓ All</button>
+      </div>
+    </div>
+    <!-- Result tabs -->
+    <div class="result-tabs" id="resultTabs" style="display:none;"></div>
+    <!-- Result panels container -->
+    <div id="resultPanelsWrap" style="flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;">
+      <div id="noResultsMsg">Result will appear here after applying patch…</div>
+    </div>
+    <div id="statusLog"></div>
+    <div id="summaryBar"></div>
+  </div>
+  </div><!-- end bottomRow -->
+</main>
+
+<footer>
+  <button class="author-sig" onclick="alert('#OpenEverything')">by Thomas</button>
+</footer>
+
+<!-- Author modal -->
+<div id="authorModal">
+  <div class="author-box" onclick="event.stopPropagation()">
+    <div class="author-hashtag">#OpenEverything</div>
+    <div class="author-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="601012051313140805070f0c04050e021514140f0e20070d01090c4e030f0d">[email&#160;protected]</a></div>
+    <div class="author-close">
+      <button class="btn btn-ghost" onclick="closeAuthorModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Details modal -->
+<div id="detailsModal">
+  <div class="details-box">
+    <div class="details-header">
+      <h2 id="detailsTitle">Patch Details</h2>
+      <div class="details-nav">
+        <button class="nav-btn" id="detailsPrev" onclick="navigateDetail(-1)" title="Previous match">&#8593;</button>
+        <span id="detailsNavLabel"></span>
+        <button class="nav-btn" id="detailsNext" onclick="navigateDetail(1)" title="Next match">&#8595;</button>
+        <button class="btn btn-ghost" onclick="closeDetailsModal()" style="padding:4px 10px;font-size:12px;margin-left:6px;">✕</button>
+      </div>
+    </div>
+    <div class="details-body">
+      <div class="details-meta" id="detailsMeta"></div>
+      <div class="details-code-wrap" id="detailsCodeWrap"></div>
+    </div>
+    <div class="details-footer">
+      <button class="btn btn-ghost" onclick="closeDetailsModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Prompt modal -->
+<div id="promptModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2>📋 System Prompt for your AI</h2>
+      <button class="btn btn-ghost" onclick="closePromptModal()" style="padding:4px 10px;font-size:12px;">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-note">
+        Paste this into your AI's system prompt (or prepend it to your first message). It instructs the AI to respond with JSON patches this tool can apply directly.
+      </div>
+      <textarea id="promptText" readonly spellcheck="false"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closePromptModal()">Close</button>
+      <button class="btn btn-primary" onclick="copyPrompt()">Copy Prompt</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── Multi-file source store ───────────────────────────────────────────────────
+// Each entry: { name: string, content: string }
+let sourceFiles   = [];      // loaded source files
+let activeSourceIdx = -1;    // which source tab is active
+
+// ── Per-file result store ─────────────────────────────────────────────────────
+// Each entry: { name, originalContent, patchedContent, log:[], ok, fuzzy, fail }
+let resultFiles   = [];
+let activeResultIdx = -1;
+
+let patchLog = [];           // flat array used by details modal (for active result tab)
+
+const AI_PROMPT = `
+# Multi-file patch support
+The AI outputs patches that can modify multiple files.
+Each entry may include a "file" field specifying the target filename.
+If no "file" field is present, the patch applies to the first/only loaded file.
+
+Example (multi-file):
+[
+  {
+    "file": "app.js",
+    "action": "replace",
+    "search": "old code",
+    "replace": "new code"
+  },
+  {
+    "file": "style.css",
+    "action": "insert_after",
+    "search": ".container {",
+    "insert": "\\n  max-width: 1200px;"
+  }
+]
+You are operating in "patch mode". When asked to modify code or text, respond with a JSON patch array — NOT the full modified file.
+
+## Patch Format
+
+\`\`\`json
+[
+  {
+    "action": "replace",
+    "search": "exact string to find (must be unique in the file)",
+    "replace": "the new string to substitute in"
+  },
+  {
+    "action": "insert_after",
+    "search": "anchor line or string",
+    "insert": "\\nnew code to insert after the anchor"
+  },
+  {
+    "action": "insert_before",
+    "search": "anchor line or string",
+    "insert": "new code to insert before the anchor\\n"
+  },
+  {
+    "action": "delete",
+    "search": "exact string to remove from the file"
+  }
+]
+\`\`\`
+
+## Rules
+
+1. **search strings must be unique** — include enough surrounding context so the string appears exactly once in the file.
+2. **search strings must be accurate** — copy whitespace, indentation, and line endings precisely from the source. The mediator has adaptive fuzzy fallback but accuracy is always preferred.
+3. **prefer small, targeted changes** — one logical change per entry. Do not bundle unrelated changes.
+4. **no full-file rewrites** — only output the patch JSON, never the entire modified file.
+5. **use raw \\n for newlines** in JSON strings, not literal newlines inside the string value.
+6. **for large changes** (e.g. a full function rewrite), use a single replace entry that captures the entire old block as search and the new block as replace.
+7. **always output valid JSON** — the patch will be machine-applied. Do not include commentary inside the JSON array.
+8. **for template literals or interpolated strings** — include enough unique surrounding lines as context so the fuzzy matcher can locate the correct region.
+
+Respond with the JSON patch block only, wrapped in a \`\`\`json code fence.`;
+
+function triggerFileOpen() {
+  document.getElementById('fileInput').click();
+}
+
+function loadFile(e) {
+  const files = e.target.files;
+  if (!files || !files.length) return;
+  Array.from(files).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      addSourceFile(file.name, ev.target.result);
+    };
+    reader.readAsText(file);
+  });
+  e.target.value = '';
+}
+
+// ── Source file tab management ────────────────────────────────────────────────
+
+function addSourceFile(name, content) {
+  // If a file with same name exists, update it
+  const existing = sourceFiles.findIndex(f => f.name === name);
+  if (existing !== -1) {
+    sourceFiles[existing].content = content;
+    setActiveSource(existing);
+  } else {
+    sourceFiles.push({ name, content });
+    setActiveSource(sourceFiles.length - 1);
+  }
+  renderSourceTabs();
+}
+
+function setActiveSource(idx) {
+  // Save current textarea back before switching
+  if (activeSourceIdx >= 0 && sourceFiles[activeSourceIdx]) {
+    sourceFiles[activeSourceIdx].content  = document.getElementById('sourceCode').value;
+    sourceFiles[activeSourceIdx].name     = document.getElementById('fileName').value.trim() || sourceFiles[activeSourceIdx].name;
+  }
+  activeSourceIdx = idx;
+  if (idx >= 0 && sourceFiles[idx]) {
+    document.getElementById('sourceCode').value = sourceFiles[idx].content;
+    document.getElementById('fileName').value   = sourceFiles[idx].name;
+  }
+  renderSourceTabs();
+}
+
+function removeSourceFile(idx) {
+  sourceFiles.splice(idx, 1);
+  if (sourceFiles.length === 0) {
+    activeSourceIdx = -1;
+    document.getElementById('sourceCode').value = '';
+    document.getElementById('fileName').value   = '';
+  } else {
+    const newIdx = Math.min(idx, sourceFiles.length - 1);
+    activeSourceIdx = -1; // prevent save-back on setActiveSource
+    setActiveSource(newIdx);
+  }
+  renderSourceTabs();
+}
+
+function syncActiveSource() {
+  if (activeSourceIdx >= 0 && sourceFiles[activeSourceIdx]) {
+    sourceFiles[activeSourceIdx].content = document.getElementById('sourceCode').value;
+  } else if (activeSourceIdx < 0) {
+    // User typed directly with no tabs — treat as anonymous file
+    const content = document.getElementById('sourceCode').value;
+    const name    = document.getElementById('fileName').value.trim() || 'untitled.txt';
+    if (content) {
+      sourceFiles.push({ name, content });
+      activeSourceIdx = 0;
+      renderSourceTabs();
+    }
+  }
+}
+
+function syncActiveFilename() {
+  if (activeSourceIdx >= 0 && sourceFiles[activeSourceIdx]) {
+    sourceFiles[activeSourceIdx].name = document.getElementById('fileName').value.trim() || sourceFiles[activeSourceIdx].name;
+    renderSourceTabs();
+  }
+}
+
+function renderSourceTabs() {
+  const bar = document.getElementById('sourceTabs');
+  if (sourceFiles.length === 0) { bar.innerHTML = ''; return; }
+  bar.innerHTML = sourceFiles.map((f, i) => `
+    <div class="src-tab ${i === activeSourceIdx ? 'active' : ''}" onclick="setActiveSource(${i})">
+      <span>${esc(f.name)}</span>
+      <button class="tab-close" onclick="event.stopPropagation();removeSourceFile(${i})" title="Remove file">✕</button>
+    </div>
+  `).join('') + `<button class="src-tab-add" onclick="triggerFileOpen()" title="Add file">+</button>`;
+}
+
+(function initDragDrop() {
+  const area = document.getElementById('sourceCode');
+  area.addEventListener('dragover', e => { e.preventDefault(); area.classList.add('drag-over'); });
+  area.addEventListener('dragleave', () => area.classList.remove('drag-over'));
+  area.addEventListener('drop', e => {
+    e.preventDefault();
+    area.classList.remove('drag-over');
+    const files = e.dataTransfer.files;
+    if (!files || !files.length) return;
+    Array.from(files).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = ev => addSourceFile(file.name, ev.target.result);
+      reader.readAsText(file);
+    });
+  });
+})();
+
+// ── Adaptive Fuzzy Matching Engine ───────────────────────────────────────────
+
+function normalise(str, mode) {
+  if (mode === 'none')     return str;
+  if (mode === 'collapse') return str.replace(/[ \t]+/g, ' ').replace(/\n[ \t]+/g, '\n').trim();
+  return str.split('\n').map(l => l.trim()).join('\n').trim();
+}
+
+function lcsLength(a, b) {
+  const cap = 400;
+  if (a.length > cap) a = a.slice(0, cap);
+  if (b.length > cap) b = b.slice(0, cap);
+  const m = a.length, n = b.length;
+  const dp = new Uint16Array((m + 1) * (n + 1));
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i*(n+1)+j] = a[i-1] === b[j-1]
+        ? dp[(i-1)*(n+1)+(j-1)] + 1
+        : Math.max(dp[(i-1)*(n+1)+j], dp[i*(n+1)+(j-1)]);
+  return dp[m*(n+1)+n];
+}
+
+function tokenJaccard(a, b) {
+  const ta = new Set(a.toLowerCase().match(/\w+/g) || []);
+  const tb = new Set(b.toLowerCase().match(/\w+/g) || []);
+  if (!ta.size && !tb.size) return 1;
+  let inter = 0;
+  ta.forEach(t => { if (tb.has(t)) inter++; });
+  const union = ta.size + tb.size - inter;
+  return union ? inter / union : 0;
+}
+
+function similarity(a, b) {
+  if (a === b) return 1;
+  const lcs = lcsLength(a, b);
+  const lcsRatio = (lcs * 2) / (a.length + b.length || 1);
+  return lcsRatio * 0.6 + tokenJaccard(a, b) * 0.4;
+}
+
+function adaptiveThreshold(searchStr) {
+  const lines = searchStr.split('\n').length;
+  const chars = searchStr.trim().length;
+  if (lines === 1 && chars < 20) return 0.92;
+  if (lines <= 2)  return 0.88;
+  if (lines <= 5)  return 0.82;
+  if (lines <= 15) return 0.76;
+  return 0.70;
+}
+
+function mapNormToOrig(original, normalised, normStart, normEnd) {
+  let ni = 0, origStart = -1, origEnd = -1;
+  for (let oi = 0; oi < original.length && ni <= normEnd; oi++) {
+    if (ni < normalised.length && normalised[ni] === original[oi]) {
+      if (ni === normStart) origStart = oi;
+      ni++;
+      if (ni === normEnd) { origEnd = oi + 1; break; }
+    }
+  }
+  if (origStart === -1 || origEnd === -1) return null;
+  return { start: origStart, end: origEnd };
+}
+
+function findBestMatch(source, search) {
+  const exactIdx = source.indexOf(search);
+  if (exactIdx !== -1)
+    return { start: exactIdx, end: exactIdx + search.length, score: 1.0, method: 'exact' };
+
+  for (const mode of ['trim_lines', 'collapse', 'none']) {
+    const ns = normalise(search, mode);
+    const no = normalise(source, mode);
+    const ni = no.indexOf(ns);
+    if (ni !== -1) {
+      if (mode === 'none') return { start: ni, end: ni + ns.length, score: 0.98, method: 'normalised' };
+      const mapped = mapNormToOrig(source, no, ni, ni + ns.length);
+      if (mapped) return { ...mapped, score: 0.97, method: 'normalised' };
+    }
+  }
+
+  const threshold   = adaptiveThreshold(search);
+  const searchLines = search.split('\n');
+  const sourceLines = source.split('\n');
+  const winBase     = Math.max(searchLines.length, 1);
+
+  const lineOffsets = [0];
+  for (let i = 0; i < sourceLines.length; i++)
+    lineOffsets.push(lineOffsets[i] + sourceLines[i].length + 1);
+
+  let bestScore = 0, bestStart = -1, bestEnd = -1, bestLineIdx = -1;
+  const minWin = Math.max(1, winBase - 2);
+  const maxWin = winBase + 2;
+
+  for (const mode of ['trim_lines', 'collapse', 'none']) {
+    const normSearch = normalise(search, mode);
+    outer: for (let ws = minWin; ws <= maxWin; ws++) {
+      for (let i = 0; i <= sourceLines.length - ws; i++) {
+        const score = similarity(normSearch, normalise(sourceLines.slice(i, i + ws).join('\n'), mode));
+        if (score > bestScore) {
+          bestScore = score;
+          bestStart = lineOffsets[i];
+          bestEnd   = Math.min(lineOffsets[i + ws] - 1, source.length);
+          bestLineIdx = i;
+        }
+        if (bestScore >= 0.999) break outer;
+      }
+    }
+    if (bestScore >= 0.999) break;
+  }
+
+  if (bestScore >= threshold && bestStart !== -1)
+    return { start: bestStart, end: bestEnd, score: bestScore, method: 'fuzzy', lineIdx: bestLineIdx };
+
+  return null;
+}
+
+function applyMatch(code, match, replacement) {
+  return code.slice(0, match.start) + replacement + code.slice(match.end);
+}
+
+// ── Patch engine ──────────────────────────────────────────────────────────────
+
+function applyPatch() {
+  // Save active textarea back to store before reading
+  syncActiveSource();
+
+  const patchInput = document.getElementById('patchJson').value;
+  const log        = document.getElementById('statusLog');
+  const summary    = document.getElementById('summaryBar');
+
+  log.innerHTML = '';
+  summary.className = '';
+  patchLog = [];
+  resultFiles = [];
+  activeResultIdx = -1;
+
+  document.getElementById('downloadBtn').disabled    = true;
+  document.getElementById('downloadAllBtn').disabled = true;
+  document.getElementById('resultTabs').style.display = 'none';
+  document.getElementById('resultPanelsWrap').innerHTML = '<div id="noResultsMsg">Result will appear here after applying patch…</div>';
+  document.getElementById('viewCode').classList.add('active');
+  document.getElementById('viewDiff').classList.remove('active');
+
+  // Need at least one source
+  const hasAnySource = sourceFiles.length > 0 || document.getElementById('sourceCode').value.trim();
+  if (!hasAnySource) { addLog('error', null, 'No source loaded. Paste code or open a file first.', null); return; }
+  if (!patchInput.trim()) { addLog('error', null, 'No patch provided. Paste the JSON patch from your AI.', null); return; }
+
+  // If the textarea has content but no tab, treat it as a single anonymous file
+  if (sourceFiles.length === 0) {
+    const content = document.getElementById('sourceCode').value;
+    const name    = document.getElementById('fileName').value.trim() || 'untitled.txt';
+    sourceFiles.push({ name, content });
+    activeSourceIdx = 0;
+    renderSourceTabs();
+  }
+
+  const cleanJson = patchInput.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim();
+  let patches;
+  try { patches = JSON.parse(cleanJson); }
+  catch (e) { addLog('error', null, 'Invalid JSON: ' + e.message, null); return; }
+
+  const mods = Array.isArray(patches)
+    ? (patches[0]?.modifications ? patches[0].modifications : patches)
+    : (patches.modifications || [patches]);
+
+  if (!mods.length) { addLog('warn', null, 'Patch parsed but contains no modifications.', null); return; }
+
+  const MAX_MODS = 500, MAX_CODE_LEN = 5_000_000;
+  if (mods.length > MAX_MODS) { addLog('error', null, `Patch contains ${mods.length} modifications — limit is ${MAX_MODS}. Aborting.`, null); return; }
+
+  // ── Group mods by target file ──────────────────────────────────────────────
+  // Build a map: filename → { sourceIdx, mods[] }
+  const fileGroups = new Map();
+
+  mods.forEach((mod, i) => {
+    let targetName = (mod.file || '').trim();
+
+    // If no "file" field, target the first/only source file
+    if (!targetName) {
+      targetName = sourceFiles[0]?.name || 'untitled.txt';
+    }
+
+    if (!fileGroups.has(targetName)) {
+      // Find matching source file (fuzzy name match)
+      const srcIdx = sourceFiles.findIndex(f =>
+        f.name === targetName ||
+        f.name.toLowerCase() === targetName.toLowerCase() ||
+        f.name.endsWith('/' + targetName) ||
+        targetName.endsWith('/' + f.name)
+      );
+      fileGroups.set(targetName, { srcIdx, mods: [] });
+    }
+    fileGroups.get(targetName).mods.push({ mod, globalIdx: i + 1 });
+  });
+
+  // ── Process each file group ────────────────────────────────────────────────
+  let globalOk = 0, globalFuzzy = 0, globalFail = 0;
+
+  fileGroups.forEach((group, targetName) => {
+    const srcIdx = group.srcIdx;
+
+    if (srcIdx === -1) {
+      // No matching source file loaded
+      group.mods.forEach(({ globalIdx }) => {
+        addLog('error', globalIdx, `File "${targetName}" not loaded — cannot apply patch.`, null);
+        globalFail++;
+      });
+      return;
+    }
+
+    const srcFile = sourceFiles[srcIdx];
+    let code = srcFile.content;
+    let ok = 0, fuzzyCount = 0, fail = 0;
+    let aborted = false;
+    const fileLog = [];
+
+    group.mods.forEach(({ mod, globalIdx }) => {
+      if (aborted) return;
+      const num    = globalIdx;
+      const action = (mod.action || 'replace').toLowerCase();
+
+      if (!mod.search) { addLog('error', num, `[${targetName}] Missing "search" field.`, null); fail++; globalFail++; return; }
+      if (mod.search.length > 100_000) { addLog('error', num, `[${targetName}] Search string too large. Skipping.`, null); fail++; globalFail++; return; }
+      if (code.length > MAX_CODE_LEN) {
+        addLog('error', num, `[${targetName}] Output exceeded ${MAX_CODE_LEN.toLocaleString()} chars. Aborting.`, null);
+        aborted = true; fail += group.mods.length; globalFail += group.mods.length; return;
+      }
+
+      try {
+        const match = findBestMatch(code, mod.search);
+        if (!match) throw new Error(`No match found (threshold: ${Math.round(adaptiveThreshold(mod.search)*100)}%). Search: ${preview(mod.search)}`);
+
+        const isFuzzy  = match.method !== 'exact';
+        const scorePct = Math.round(match.score * 100);
+        if (isFuzzy) fuzzyCount++;
+
+        const matchStartLine = code.slice(0, match.start).split('\n').length - 1;
+
+        const logEntry = {
+          num, action, isFuzzy, scorePct, method: match.method,
+          search: mod.search,
+          replace: mod.replace ?? mod.insert ?? '',
+          matchStart: match.start, matchEnd: match.end,
+          matchStartLine,
+          codeSnapshot: code,
+          status: 'ok',
+          message: '',
+          file: targetName
+        };
+
+        if (action === 'replace') {
+          const replacement = mod.replace ?? '';
+          if (replacement.length > 500_000) throw new Error(`Replacement too large (${replacement.length} chars).`);
+          if (mod.search.length > 0 && replacement === mod.search) throw new Error(`Search and replace are identical — no change would be made.`);
+          if (mod.search.length > 0 && replacement.includes(mod.search)) throw new Error(`Replacement contains the search string — would cause repeated matches.`);
+          code = applyMatch(code, match, replacement);
+          logEntry.message = isFuzzy
+            ? `[${targetName}] Fuzzy replace (${scorePct}%): ${preview(mod.search)} → ${preview(replacement)}`
+            : `[${targetName}] Replaced: ${preview(mod.search)} → ${preview(replacement)}`;
+          addLog(isFuzzy ? 'fuzzy' : 'ok', num, logEntry.message, logEntry);
+          ok++; globalOk++;
+
+        } else if (action === 'delete') {
+          code = applyMatch(code, match, '');
+          logEntry.message = isFuzzy ? `[${targetName}] Fuzzy delete (${scorePct}%): ${preview(mod.search)}` : `[${targetName}] Deleted: ${preview(mod.search)}`;
+          addLog(isFuzzy ? 'fuzzy' : 'ok', num, logEntry.message, logEntry);
+          ok++; globalOk++;
+
+        } else if (action === 'insert_after') {
+          const insert = mod.insert ?? '';
+          if (insert.length > 500_000) throw new Error(`Insert string too large.`);
+          const matched = code.slice(match.start, match.end);
+          code = applyMatch(code, match, matched + insert);
+          logEntry.message = isFuzzy ? `[${targetName}] Fuzzy insert_after (${scorePct}%): ${preview(mod.search)}` : `[${targetName}] Inserted after: ${preview(mod.search)}`;
+          addLog(isFuzzy ? 'fuzzy' : 'ok', num, logEntry.message, logEntry);
+          ok++; globalOk++;
+
+        } else if (action === 'insert_before') {
+          const insert = mod.insert ?? '';
+          if (insert.length > 500_000) throw new Error(`Insert string too large.`);
+          const matched = code.slice(match.start, match.end);
+          code = applyMatch(code, match, insert + matched);
+          logEntry.message = isFuzzy ? `[${targetName}] Fuzzy insert_before (${scorePct}%): ${preview(mod.search)}` : `[${targetName}] Inserted before: ${preview(mod.search)}`;
+          addLog(isFuzzy ? 'fuzzy' : 'ok', num, logEntry.message, logEntry);
+          ok++; globalOk++;
+
+        } else {
+          throw new Error(`Unknown action "${action}". Supported: replace, delete, insert_after, insert_before.`);
+        }
+
+        fileLog.push(logEntry);
+
+      } catch (e) {
+        const errEntry = { num, action, isFuzzy: false, scorePct: 0, method: 'none', search: mod.search, replace: '', matchStart: -1, matchEnd: -1, matchStartLine: -1, codeSnapshot: code, status: 'error', message: e.message, file: targetName };
+        addLog('error', num, `[${targetName}] ${e.message}`, errEntry);
+        fail++; globalFail++;
+      }
+    });
+
+    globalFuzzy += fuzzyCount;
+
+    resultFiles.push({
+      name: targetName,
+      originalContent: srcFile.content,
+      patchedContent: code,
+      log: fileLog,
+      ok, fuzzy: fuzzyCount, fail
+    });
+  });
+
+  // ── Render result tabs ─────────────────────────────────────────────────────
+  if (resultFiles.length > 0) {
+    renderResultTabs();
+    setActiveResult(0);
+    document.getElementById('downloadAllBtn').disabled = resultFiles.length < 2;
+  }
+
+  // ── Summary bar ────────────────────────────────────────────────────────────
+  const exactCount = globalOk - globalFuzzy;
+  summary.innerHTML = `
+    <span class="sum-ok">✓ ${exactCount} exact</span>
+    ${globalFuzzy ? `<span class="sum-sep">|</span><span class="sum-fuzzy">~ ${globalFuzzy} fuzzy</span>` : ''}
+    ${globalFail ? `<span class="sum-sep">|</span><span class="sum-err">✗ ${globalFail} failed</span>` : ''}
+    <span class="sum-sep">|</span>
+    <span style="color:var(--muted)">${mods.length} total</span>
+    ${resultFiles.length > 1 ? `<span class="sum-sep">|</span><span style="color:var(--accent)">${resultFiles.length} files patched</span>` : ''}
+  `;
+  summary.className = 'visible';
+}
+
+// ── Result tab management ─────────────────────────────────────────────────────
+
+function renderResultTabs() {
+  const bar = document.getElementById('resultTabs');
+  if (resultFiles.length === 0) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  bar.innerHTML = resultFiles.map((f, i) => {
+    const dotCls = f.fail > 0 ? 'tab-dot has-errors' : f.fuzzy > 0 ? 'tab-dot has-fuzzy' : 'tab-dot';
+    return `<div class="res-tab ${i === activeResultIdx ? 'active' : ''}" onclick="setActiveResult(${i})">
+      <span class="${dotCls}"></span>
+      <span>${esc(f.name)}</span>
+    </div>`;
+  }).join('');
+}
+
+function setActiveResult(idx) {
+  activeResultIdx = idx;
+  renderResultTabs();
+
+  const wrap = document.getElementById('resultPanelsWrap');
+  wrap.innerHTML = '';
+
+  const rf = resultFiles[idx];
+  if (!rf) return;
+
+  // Build a panel
+  const panel = document.createElement('div');
+  panel.className = 'result-panel active';
+  panel.innerHTML = `
+    <div class="result-bar">
+      <span id="matchStats" style="font-size:10px;color:var(--muted);">
+        ${rf.ok} applied · ${rf.fuzzy} fuzzy · ${rf.fail} failed
+      </span>
+    </div>
+    <textarea id="resultCode" readonly spellcheck="false" style="flex:1;min-height:0;">${esc(rf.patchedContent)}</textarea>
+    <div id="diffView" style="display:none;flex:1;overflow-y:auto;font-family:var(--mono);font-size:11.5px;line-height:1.7;padding:8px 0;min-height:0;"></div>
+  `;
+  wrap.appendChild(panel);
+
+  // Update patchLog for details modal to reflect this file's log
+  patchLog = rf.log;
+
+  document.getElementById('downloadBtn').disabled = false;
+
+  // Reset view toggle
+  document.getElementById('viewCode').classList.add('active');
+  document.getElementById('viewDiff').classList.remove('active');
+  document.getElementById('resultCode').style.display = '';
+  document.getElementById('diffView').style.display   = 'none';
+}
+
+// ── Diff view ─────────────────────────────────────────────────────────────────
+
+function setView(mode) {
+  document.getElementById('viewCode').classList.toggle('active', mode === 'code');
+  document.getElementById('viewDiff').classList.toggle('active', mode === 'diff');
+  const rc = document.getElementById('resultCode');
+  const dv = document.getElementById('diffView');
+  if (!rc || !dv) return;
+  rc.style.display = mode === 'code' ? '' : 'none';
+  dv.style.display = mode === 'diff' ? 'block' : 'none';
+  if (mode === 'diff') {
+    const rf = resultFiles[activeResultIdx];
+    if (rf) renderDiff(rf.originalContent, rf.patchedContent, dv);
+  }
+}
+
+function renderDiff(originalSource, patchedSource, el) {
+  if (!el) el = document.getElementById('diffView');
+  if (!originalSource || !patchedSource) { el.innerHTML = '<div style="padding:14px 16px;color:var(--muted);font-size:11px;font-style:italic;">Apply a patch first to see the diff.</div>'; return; }
+
+  const aLines = originalSource.split('\n');
+  const bLines = patchedSource.split('\n');
+  const CONTEXT = 3;
+  const diff   = lineDiff(aLines, bLines);
+  const hunks  = [];
+  let hunk = null;
+
+  diff.forEach((d, i) => {
+    if (d.type !== 'eq') {
+      if (!hunk) {
+        hunk = { lines: [] };
+        for (let k = Math.max(0, i - CONTEXT); k < i; k++)
+          if (diff[k]?.type === 'eq') hunk.lines.push({ ...diff[k], idx: k });
+      }
+      hunk.lines.push({ ...d, idx: i });
+      hunk.end = i;
+    } else if (hunk) {
+      hunk.lines.push({ ...d, idx: i });
+      if (i - hunk.end >= CONTEXT * 2) { hunks.push(hunk); hunk = null; }
+    }
+  });
+  if (hunk) hunks.push(hunk);
+
+  if (!hunks.length) { el.innerHTML = '<div style="padding:20px;color:var(--muted);font-size:11px;">No differences — patch produced identical output.</div>'; return; }
+
+  let aIdx = 0, bIdx = 0;
+  diff.forEach(d => { if (d.type !== 'add') d.aLine = ++aIdx; });
+  aIdx = 0;
+  diff.forEach(d => { if (d.type !== 'del') d.bLine = ++bIdx; });
+
+  let html = '';
+  hunks.forEach((hunk, hi) => {
+    html += `<div class="diff-sep">@@ hunk ${hi + 1} @@</div>`;
+    hunk.lines.forEach(d => {
+      const cls  = d.type === 'add' ? 'diff-add' : d.type === 'del' ? 'diff-del' : 'diff-ctx';
+      const sign = d.type === 'add' ? '+' : d.type === 'del' ? '−' : ' ';
+      const ln   = d.type === 'add' ? d.bLine : d.aLine;
+      html += `<div class="diff-line ${cls}"><span class="diff-ln">${ln ?? ''}</span><span class="diff-content">${sign} ${esc(d.text)}</span></div>`;
+    });
+  });
+  el.innerHTML = html;
+}
+
+function lineDiff(a, b) {
+  const result = [];
+  let ai = 0, bi = 0;
+  const m = a.length, n = b.length;
+
+  if (m + n > 4000) {
+    while (ai < m || bi < n) {
+      if (ai < m && bi < n && a[ai] === b[bi]) { result.push({ type:'eq', text: a[ai] }); ai++; bi++; }
+      else if (bi < n && (ai >= m || a[ai] !== b[bi])) { result.push({ type:'add', text: b[bi] }); bi++; }
+      else { result.push({ type:'del', text: a[ai] }); ai++; }
+    }
+    return result;
+  }
+
+  const dp = Array.from({ length: m+1 }, () => new Int16Array(n+1));
+  for (let i = m-1; i >= 0; i--)
+    for (let j = n-1; j >= 0; j--)
+      dp[i][j] = a[i] === b[j] ? dp[i+1][j+1] + 1 : Math.max(dp[i+1][j], dp[i][j+1]);
+
+  while (ai < m || bi < n) {
+    if (ai < m && bi < n && a[ai] === b[bi]) { result.push({ type:'eq', text: a[ai] }); ai++; bi++; }
+    else if (bi < n && (ai >= m || dp[ai+1]?.[bi] <= dp[ai]?.[bi+1])) { result.push({ type:'add', text: b[bi] }); bi++; }
+    else { result.push({ type:'del', text: a[ai] }); ai++; }
+  }
+  return result;
+}
+
+// ── Log helpers ───────────────────────────────────────────────────────────────
+
+function addLog(type, num, msg, entry) {
+  const log  = document.getElementById('statusLog');
+  const icons = { ok:'✓', error:'✗', warn:'⚠', info:'ℹ', fuzzy:'~' };
+  const row  = document.createElement('div');
+  row.className = `log-row log-${type}`;
+
+  const hasDetail = entry && entry.matchStart !== -1;
+  row.innerHTML = `
+    <span class="log-icon">${icons[type] ?? '·'}</span>
+    ${num !== null ? `<span class="log-num">#${num}</span>` : ''}
+    <span class="log-text">${esc(msg)}</span>
+    ${hasDetail ? `<button class="log-detail-btn" title="View match location">Details ›</button>` : ''}
+  `;
+
+  if (hasDetail) {
+    const idx = patchLog.length;
+    patchLog.push(entry);
+    row.querySelector('.log-detail-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      openDetailsModal(idx);
+    });
+    row.addEventListener('click', () => openDetailsModal(idx));
+  }
+
+  log.appendChild(row);
+  log.scrollTop = log.scrollHeight;
+}
+
+// ── Details modal ─────────────────────────────────────────────────────────────
+
+let detailsCurrentIdx = 0;
+
+function openDetailsModal(idx) {
+  detailsCurrentIdx = idx;
+  renderDetailsModal();
+  document.getElementById('detailsModal').classList.add('open');
+}
+
+function closeDetailsModal() {
+  document.getElementById('detailsModal').classList.remove('open');
+}
+
+function navigateDetail(dir) {
+  const next = detailsCurrentIdx + dir;
+  if (next >= 0 && next < patchLog.length) {
+    detailsCurrentIdx = next;
+    renderDetailsModal();
+  }
+}
+
+function renderDetailsModal() {
+  const entry = patchLog[detailsCurrentIdx];
+  if (!entry) return;
+
+  document.getElementById('detailsTitle').textContent = `Patch #${entry.num} — ${entry.action}`;
+  document.getElementById('detailsNavLabel').textContent = `${detailsCurrentIdx + 1} / ${patchLog.length}`;
+  document.getElementById('detailsPrev').disabled = detailsCurrentIdx === 0;
+  document.getElementById('detailsNext').disabled = detailsCurrentIdx === patchLog.length - 1;
+
+  const badgeCls  = entry.status === 'error' ? 'dm-err' : entry.isFuzzy ? 'dm-fuzzy' : 'dm-ok';
+  const badgeTxt  = entry.status === 'error' ? 'Failed' : entry.isFuzzy ? `Fuzzy ${entry.scorePct}%` : 'Exact';
+  const methLabel = entry.method === 'fuzzy' ? 'sliding-window' : entry.method;
+
+  document.getElementById('detailsMeta').innerHTML = `
+    <span class="dm-badge ${badgeCls}">${badgeTxt}</span>
+    <span>Method: <strong style="color:var(--text)">${methLabel}</strong></span>
+    ${entry.matchStart >= 0 ? `<span>Char offset: <strong style="color:var(--text)">${entry.matchStart}–${entry.matchEnd}</strong></span>` : ''}
+    ${entry.matchStartLine >= 0 ? `<span>Line: <strong style="color:var(--text)">${entry.matchStartLine + 1}</strong></span>` : ''}
+  `;
+
+  const lines = entry.codeSnapshot.split('\n');
+  const CONTEXT = 8;
+  const startLine = entry.matchStartLine;
+  const matchLines = entry.codeSnapshot.slice(entry.matchStart, entry.matchEnd).split('\n').length;
+  const from = Math.max(0, startLine - CONTEXT);
+  const to   = Math.min(lines.length - 1, startLine + matchLines + CONTEXT);
+
+  let html = `<div class="details-section-label">Source context around match</div>`;
+  for (let i = from; i <= to; i++) {
+    const isMatch = i >= startLine && i < startLine + matchLines;
+    const cls = isMatch ? 'details-code-line highlight-match' : 'details-code-line';
+    html += `<div class="${cls}"><span class="dcl-ln">${i + 1}</span><span class="dcl-content">${esc(lines[i])}</span></div>`;
+  }
+
+  const wrap = document.getElementById('detailsCodeWrap');
+  wrap.innerHTML = html;
+
+  // Auto-scroll so the first highlighted line is visible
+  requestAnimationFrame(() => {
+    const highlighted = wrap.querySelector('.highlight-match');
+    if (highlighted) highlighted.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function preview(str) {
+  if (!str) return '""';
+  const s = str.replace(/\n/g, '↵').replace(/\t/g, '→');
+  return '"' + (s.length > 60 ? s.slice(0, 60) + '…' : s) + '"';
+}
+
+function esc(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function copyResult() {
+  const el = document.getElementById('resultCode');
+  if (!el || !el.value) return;
+  const btn = document.getElementById('copyBtn');
+  const orig = btn.textContent;
+  navigator.clipboard.writeText(el.value)
+    .then(() => { btn.textContent = '✓ Copied'; setTimeout(() => btn.textContent = orig, 1800); })
+    .catch(() => { el.select(); document.execCommand('copy'); });
+}
+
+function downloadFile() {
+  const rf = resultFiles[activeResultIdx];
+  if (!rf) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([rf.patchedContent], { type: 'text/plain' }));
+  a.download = rf.name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function downloadAll() {
+  resultFiles.forEach(rf => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([rf.patchedContent], { type: 'text/plain' }));
+    a.download = rf.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  });
+}
+
+function clearAll() {
+  sourceFiles     = [];
+  activeSourceIdx = -1;
+  resultFiles     = [];
+  activeResultIdx = -1;
+  patchLog        = [];
+
+  document.getElementById('sourceCode').value   = '';
+  document.getElementById('patchJson').value     = '';
+  document.getElementById('fileName').value      = '';
+  document.getElementById('statusLog').innerHTML = '';
+  document.getElementById('summaryBar').className = '';
+  document.getElementById('resultTabs').style.display = 'none';
+  document.getElementById('resultTabs').innerHTML = '';
+  document.getElementById('resultPanelsWrap').innerHTML = '<div id="noResultsMsg">Result will appear here after applying patch…</div>';
+  document.getElementById('downloadBtn').disabled    = true;
+  document.getElementById('downloadAllBtn').disabled = true;
+  document.getElementById('viewCode').classList.add('active');
+  document.getElementById('viewDiff').classList.remove('active');
+  renderSourceTabs();
+}
+
+function showPromptModal() {
+  document.getElementById('promptText').value = AI_PROMPT;
+  document.getElementById('promptModal').classList.add('open');
+}
+
+function closePromptModal() {
+  document.getElementById('promptModal').classList.remove('open');
+}
+
+function copyPrompt() {
+  const btn = document.querySelector('#promptModal .btn-primary');
+  const orig = btn.textContent;
+  navigator.clipboard.writeText(AI_PROMPT)
+    .then(() => { btn.textContent = '✓ Copied!'; setTimeout(() => btn.textContent = orig, 1800); });
+}
+
+function showAuthorModal() {
+  document.getElementById('authorModal').classList.add('open');
+}
+
+function closeAuthorModal() {
+  document.getElementById('authorModal').classList.remove('open');
+}
+
+// ── Resizable panes ───────────────────────────────────────────────────────────
+
+(function initResizers() {
+  // Horizontal resizer: resize sourcePane vs patchPane
+  const hRes = document.getElementById('hResizer');
+  const srcPane = document.getElementById('sourcePane');
+  const topRow = document.getElementById('topRow');
+
+  hRes.addEventListener('mousedown', function(e) {
+    e.preventDefault();
+    hRes.classList.add('dragging');
+    const startX = e.clientX;
+    const startW = srcPane.getBoundingClientRect().width;
+    const rowW   = topRow.getBoundingClientRect().width;
+
+    function onMove(e) {
+      const delta = e.clientX - startX;
+      const newW  = Math.max(120, Math.min(rowW - 120 - 5, startW + delta));
+      srcPane.style.width = newW + 'px';
+      srcPane.style.flex  = 'none';
+    }
+    function onUp() {
+      hRes.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  // Vertical resizer: resize topRow vs bottomRow
+  const vRes   = document.getElementById('vResizer');
+  const main   = document.getElementById('mainLayout');
+
+  vRes.addEventListener('mousedown', function(e) {
+    e.preventDefault();
+    vRes.classList.add('dragging');
+    const startY  = e.clientY;
+    const startH  = topRow.getBoundingClientRect().height;
+    const mainH   = main.getBoundingClientRect().height;
+
+    function onMove(e) {
+      const delta = e.clientY - startY;
+      const newH  = Math.max(80, Math.min(mainH - 80 - 5, startH + delta));
+      topRow.style.height = newH + 'px';
+      topRow.style.flex   = 'none';
+    }
+    function onUp() {
+      vRes.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+})();
+
+
+document.getElementById('detailsModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeDetailsModal(); });
+document.getElementById('authorModal').addEventListener('click',  e => { if (e.target === e.currentTarget) closeAuthorModal(); });
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') applyPatch();
+  if (e.key === 'Escape') { closePromptModal(); closeDetailsModal(); closeAuthorModal(); }
+  if (e.key === 'ArrowUp'   && document.getElementById('detailsModal').classList.contains('open')) navigateDetail(-1);
+  if (e.key === 'ArrowDown' && document.getElementById('detailsModal').classList.contains('open')) navigateDetail(1);
+});
+</script>
+</body>
+</html>
